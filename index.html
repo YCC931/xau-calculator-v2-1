@@ -1,0 +1,1208 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>XAU Trading Position Calculator</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #060b16;
+    --panel: rgba(22,32,58,0.55);
+    --panel-2: rgba(22,32,58,0.42);
+    --line: rgba(125,211,252,0.16);
+    --gold: #2f6fed;
+    --gold-bright: #7dd3fc;
+    --gold-dim: #7c93c9;
+    --text: #eaf2ff;
+    --text-dim: #8fa3c9;
+    --long: #22c55e;
+    --short: #ef4444;
+    --danger: #ef4444;
+    --accent2: #38bdf8;
+    --radius: 18px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(ellipse 1000px 700px at 8% -10%, rgba(56,189,248,0.22), transparent 55%),
+      radial-gradient(ellipse 800px 600px at 100% 15%, rgba(47,111,237,0.20), transparent 55%),
+      linear-gradient(160deg, #0a1224 0%, #060b16 50%, #030509 100%);
+    background-attachment:fixed;
+    color:var(--text);
+    font-family:'Space Grotesk', sans-serif;
+    padding:28px 16px 60px;
+  }
+  .wrap{max-width:1180px;margin:0 auto;}
+
+  header{display:flex;flex-direction:column;gap:14px;margin-bottom:24px;animation:riseIn .4s cubic-bezier(.16,1,.3,1) backwards;}
+  header .top-row{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;}
+  header .bar{width:9px;height:9px;background:var(--gold-bright);border-radius:50%;align-self:center;}
+  h1{
+    font-family:'Playfair Display', serif;font-weight:700;
+    font-size:23px;margin:0;letter-spacing:0.3px;color:var(--text);
+  }
+  .sub{color:var(--gold-bright);font-size:13px;font-family:'Playfair Display', serif;font-weight:600;font-style:italic;opacity:0.8;}
+  .shimmer-line{
+    height:1px;border-radius:1px;
+    background:linear-gradient(90deg, transparent, var(--gold-dim) 35%, var(--gold-bright) 50%, var(--gold-dim) 65%, transparent);
+    background-size:200% 100%;
+    animation:shimmer 7s ease-in-out infinite;
+    opacity:0.55;
+  }
+  @keyframes shimmer{0%{background-position:200% 0;}100%{background-position:-200% 0;}}
+
+  ::-webkit-scrollbar{width:10px;height:10px;}
+  ::-webkit-scrollbar-track{background:var(--bg);}
+  ::-webkit-scrollbar-thumb{background:var(--line);border-radius:6px;border:2px solid var(--bg);}
+  ::-webkit-scrollbar-thumb:hover{background:#374063;}
+  *{scrollbar-color:var(--line) var(--bg);scrollbar-width:thin;}
+
+  @keyframes riseIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+
+  /* ---- news banner ---- */
+  .news{
+    border:1px solid transparent;
+    background:
+      linear-gradient(var(--panel), var(--panel)) padding-box,
+      linear-gradient(155deg, rgba(125,211,252,0.35), rgba(47,111,237,0.08) 60%) border-box;
+    border-radius:var(--radius);
+    padding:14px 16px;
+    margin-bottom:20px;
+    backdrop-filter:blur(18px) saturate(160%);
+    -webkit-backdrop-filter:blur(18px) saturate(160%);
+    box-shadow:0 1px 0 rgba(255,255,255,0.06) inset, 0 12px 30px -10px rgba(0,0,0,0.5);
+    animation:riseIn .45s cubic-bezier(.16,1,.3,1) backwards;
+  }
+  .news.alert{border-color:var(--danger);background:linear-gradient(180deg, rgba(220,38,38,0.12), rgba(220,38,38,0.03));box-shadow:0 0 20px rgba(220,38,38,0.15);}
+  .news-head{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-dim);margin-bottom:8px;font-family:'JetBrains Mono',monospace;}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--long);flex:none;}
+  .news.alert .dot{background:var(--danger);animation:pulse 1.2s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.35;}}
+  .news-alert-text{font-size:14px;font-weight:600;color:var(--danger);margin-bottom:6px;}
+  .news-list{display:flex;flex-direction:column;gap:8px;font-family:'JetBrains Mono',monospace;font-size:12px;}
+  .news-chip{
+    border:1px solid var(--line);
+    padding:6px 12px;
+    border-radius:10px;
+    color:var(--text-dim);
+    white-space:normal;
+    line-height:1.5;
+  }
+  .news-chip.soon{border-color:var(--danger);color:var(--danger);}
+  .news-empty{color:var(--text-dim);font-size:13px;font-family:'JetBrains Mono',monospace;}
+
+  /* ---- layout ---- */
+  .grid{display:grid;grid-template-columns:360px 1fr;gap:20px;align-items:start;}
+  @media (max-width:880px){.grid{grid-template-columns:1fr;}}
+
+  .card{
+    background:
+      linear-gradient(var(--panel), var(--panel)) padding-box,
+      linear-gradient(155deg, rgba(125,211,252,0.35), rgba(47,111,237,0.08) 55%, rgba(125,211,252,0.12) 100%) border-box;
+    border:1px solid transparent;
+    border-radius:16px;
+    padding:18px;
+    backdrop-filter:blur(18px) saturate(160%);
+    -webkit-backdrop-filter:blur(18px) saturate(160%);
+    box-shadow:0 1px 0 rgba(255,255,255,0.06) inset, 0 12px 30px -10px rgba(0,0,0,0.55), 0 2px 8px rgba(0,0,0,0.3);
+    transition:box-shadow .2s, transform .2s;
+    animation:riseIn .5s cubic-bezier(.16,1,.3,1) backwards;
+  }
+  .card:hover{box-shadow:0 1px 0 rgba(255,255,255,0.08) inset, 0 16px 36px -10px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.35);}
+  .grid > div:first-child .card:nth-child(1){animation-delay:.02s;}
+  .grid > div:first-child .card:nth-child(2){animation-delay:.08s;}
+  .grid > div:last-child .card:nth-child(1){animation-delay:.05s;}
+  .grid > div:last-child .card:nth-child(2){animation-delay:.11s;}
+  .card + .card{margin-top:16px;}
+  .card h2{
+    font-size:11px;text-transform:uppercase;letter-spacing:1.8px;
+    color:var(--text-dim);margin:0 0 16px;font-weight:700;
+    display:flex;align-items:center;gap:10px;font-family:'Space Grotesk',sans-serif;
+  }
+  .card h2::before{content:"";width:14px;height:1px;background:var(--gold-bright);opacity:0.8;}
+  .card h2::after{content:"";flex:1;height:1px;background:var(--line);}
+
+  label{display:block;font-size:12.5px;color:var(--text-dim);margin:14px 0 6px;font-weight:600;letter-spacing:0.2px;}
+  label:first-of-type{margin-top:0;}
+  input[type=number], input[type=text]{
+    width:100%;background:var(--panel-2);border:1px solid var(--line);
+    color:var(--text);padding:9px 12px;border-radius:11px;font-size:14px;font-weight:600;
+    font-family:'JetBrains Mono',monospace;transition:border-color .15s, box-shadow .15s;
+  }
+  input:focus{outline:none;border-color:var(--gold-bright);box-shadow:0 0 0 3px rgba(61,90,254,0.15);}
+
+  .btn-row{display:flex;gap:8px;flex-wrap:wrap;}
+  .chip-btn{
+    flex:1;min-width:56px;
+    background:var(--panel-2);border:1px solid var(--line);color:var(--text-dim);
+    padding:9px 8px;border-radius:11px;font-size:13px;font-weight:600;cursor:pointer;
+    font-family:'JetBrains Mono',monospace;transition:all .15s;
+  }
+  .chip-btn:active{transform:scale(0.96);}
+  .mode-btn{flex:none;min-width:0;width:auto;padding:6px 14px;font-size:11.5px;}
+  .chip-btn:hover{border-color:var(--gold-bright);color:var(--text);}
+  .chip-btn.long, .chip-btn.short{font-weight:700;}
+  .chip-btn.active{
+    background:linear-gradient(135deg, var(--accent2), var(--gold-bright));
+    border-color:transparent;color:#ffffff;font-weight:700;
+    box-shadow:0 0 14px rgba(47,91,255,0.3);
+  }
+  .chip-btn.long.active{
+    background:linear-gradient(135deg, #4ade80, var(--long));
+    border-color:transparent;color:#06210f;
+    box-shadow:0 0 14px rgba(34,197,94,0.3);
+  }
+  .chip-btn.short.active{
+    background:linear-gradient(135deg, #fb7185, var(--short));
+    border-color:transparent;color:#2b0505;
+    box-shadow:0 0 14px rgba(239,68,68,0.3);
+  }
+
+  .calc-btn{
+    width:100%;margin-top:20px;padding:13px;border:none;border-radius:13px;
+    background:linear-gradient(135deg, var(--accent2), var(--gold-bright));
+    color:#ffffff;font-weight:700;font-size:14.5px;
+    cursor:pointer;letter-spacing:0.3px;
+    font-family:'Space Grotesk',sans-serif;
+    box-shadow:0 6px 22px rgba(47,91,255,0.35);
+    transition:transform .12s, box-shadow .12s, filter .12s;
+  }
+  .calc-btn:hover{filter:brightness(1.1);transform:translateY(-1px);box-shadow:0 8px 28px rgba(47,91,255,0.45);}
+  .calc-btn:active{transform:translateY(1px);}
+  .calc-btn:disabled{background:#2a2e45;color:#6b7188;cursor:not-allowed;box-shadow:none;}
+
+  .hint{font-size:11.5px;color:var(--text-dim);margin-top:4px;line-height:1.5;}
+
+  .btn-pair{display:flex;gap:10px;margin-top:20px;}
+  .btn-pair .calc-btn{margin-top:0;flex:2.2;}
+  .reset-btn{
+    flex:1;border:1px solid var(--line);background:transparent;color:var(--text-dim);
+    border-radius:13px;font-size:13.5px;cursor:pointer;font-family:'Space Grotesk',sans-serif;
+    transition:all .15s;
+  }
+  .reset-btn:hover{border-color:var(--short);color:var(--short);}
+
+  /* ---- results ---- */
+  .res-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  @media (max-width:640px){.res-grid{grid-template-columns:1fr;}}
+  .row{
+    display:flex;justify-content:space-between;align-items:baseline;
+    padding:8px 0;border-bottom:1px dashed var(--line);font-size:13.5px;
+  }
+  .row:last-child{border-bottom:none;}
+  .row .k{color:var(--text-dim);}
+  .row .v{font-family:'JetBrains Mono',monospace;font-weight:600;}
+  .v.pos{color:var(--long);}
+  .v.neg{color:var(--short);}
+  .v.gold{color:var(--gold);}
+  .dir-tag{
+    display:inline-block;padding:2px 10px;border-radius:20px;font-size:12px;font-weight:700;
+    font-family:'JetBrains Mono',monospace;letter-spacing:0.5px;
+  }
+  .dir-tag.long{background:rgba(22,163,74,0.12);color:var(--long);box-shadow:0 0 10px rgba(22,163,74,0.15) inset;}
+  .dir-tag.short{background:rgba(220,38,38,0.12);color:var(--short);box-shadow:0 0 10px rgba(220,38,38,0.15) inset;}
+
+  .empty-state{color:var(--text-dim);font-size:13.5px;text-align:center;padding:30px 10px;}
+  footer{display:flex;justify-content:space-between;align-items:center;color:var(--text-dim);font-size:11.5px;margin-top:26px;font-family:'JetBrains Mono',monospace;flex-wrap:wrap;gap:8px;}
+
+  /* ---- advanced / collapsible preset info ---- */
+  details.adv{margin-top:14px;}
+  details.adv summary{
+    cursor:pointer;font-size:12px;color:var(--text-dim);list-style:none;
+    display:flex;align-items:center;gap:6px;font-family:'JetBrains Mono',monospace;
+    padding:8px 0;border-top:1px solid var(--line);
+  }
+  details.adv summary::-webkit-details-marker{display:none;}
+  details.adv summary::before{content:"▸";color:var(--gold-dim);transition:transform .15s;}
+  details.adv[open] summary::before{transform:rotate(90deg);}
+  details.adv .adv-body{padding-top:10px;}
+  .field-grid{
+    display:grid;grid-template-columns:repeat(auto-fit, minmax(90px, 1fr));
+    gap:8px;margin-top:10px;
+  }
+  .field-grid > *{min-width:0;}
+  .preset-strip{display:contents;}
+  #tpFixedWrap{display:contents;}
+  #walletBalWrap{display:contents;}
+  .preset-pill{
+    background:var(--panel-2);border:1px solid var(--line);border-radius:20px;
+    padding:5px 11px;font-size:11.5px;color:var(--text-dim);font-family:'JetBrains Mono',monospace;
+  }
+  .preset-pill b{color:var(--text);font-weight:600;}
+
+  /* ---- mini field cards: label on top, editable number below ---- */
+  .mini-field{
+    background:var(--panel-2);border:1px solid var(--line);border-radius:12px;
+    padding:8px 12px 9px;min-width:0;overflow:hidden;
+    transition:border-color .15s, box-shadow .15s, transform .15s;
+  }
+  .mini-field:hover{border-color:#333955;}
+  .mini-field:focus-within{border-color:var(--gold-bright);box-shadow:0 0 0 3px rgba(111,168,255,0.12);}
+  .mini-field .mini-label{
+    font-size:10px;color:var(--text-dim);text-transform:uppercase;
+    letter-spacing:0.5px;margin-bottom:4px;white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis;
+  }
+  .mini-field .mini-row{display:flex;flex-direction:column;align-items:flex-start;gap:1px;min-width:0;}
+  .mini-field .mini-input{
+    background:transparent;border:none;color:var(--text);font-weight:700;
+    font-family:'JetBrains Mono',monospace;font-size:14px;padding:0;
+    width:100%;min-width:0;-moz-appearance:textfield;
+  }
+  .mini-field .mini-input:focus{outline:none;color:var(--gold-bright);}
+  .mini-field .mini-input::-webkit-inner-spin-button,
+  .mini-field .mini-input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
+  .mini-field .mini-unit{font-size:10px;color:var(--text-dim);flex:none;}
+  .mini-field.readonly{opacity:0.9;}
+  .mini-field .mini-static{
+    font-family:'JetBrains Mono',monospace;font-weight:700;font-size:15px;color:var(--text);
+  }
+
+  /* ---- split dropdown (collapsible select) ---- */
+  /* ---- add / delete custom tier ---- */
+  .add-tier-btn{flex:0 0 auto;min-width:38px;font-size:15px;color:var(--gold-bright);font-weight:700;}
+  .tier-del{
+    margin-left:6px;opacity:0.55;font-weight:400;display:inline-block;
+    transition:opacity .12s, color .12s;
+  }
+  .tier-del:hover{opacity:1;color:var(--short);}
+
+  /* ---- sub panel (split / hedge groupings) ---- */
+  .subpanel{
+    background:var(--panel-2);border:1px solid var(--line);border-radius:14px;
+    padding:14px 16px;margin-top:14px;
+  }
+  .subpanel-title{font-size:11.5px;color:var(--gold-dim);font-weight:600;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:10px;}
+  .subpanel label{margin-top:10px;}
+  .subpanel label:first-of-type{margin-top:0;}
+
+  /* Compact mode inside the collapsible 详情 panel: strip the extra boxed
+     framing so it reads as one light group of fields, not stacked cards. */
+  details.adv .adv-body{padding-top:4px;}
+  details.adv .adv-body label{margin:10px 0 5px;font-size:12px;}
+  details.adv .adv-body label:first-of-type{margin-top:8px;}
+  details.adv .adv-body input[type=number]{padding:7px 10px;font-size:13px;}
+  details.adv .adv-body .subpanel{
+    background:none;border:none;border-top:1px dashed var(--line);
+    border-radius:0;padding:10px 0 0;margin-top:10px;
+  }
+  details.adv .adv-body .subpanel-title{font-size:10.5px;margin-bottom:6px;}
+  details.adv .adv-body .hint{font-size:11px;}
+
+  /* ---- stat tiles for results ---- */
+  .stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .stat-tile{
+    background:var(--panel-2);border:1px solid var(--line);border-radius:13px;
+    padding:13px 15px;position:relative;overflow:hidden;
+  }
+  .stat-tile .stat-label{font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:6px;}
+  .stat-tile .stat-value{font-family:'JetBrains Mono',monospace;font-size:19px;font-weight:700;}
+  .stat-tile:has(.stat-value.pos){background:linear-gradient(160deg, rgba(34,197,94,0.12), var(--panel-2) 60%);border-color:rgba(34,197,94,0.35);}
+  .stat-tile:has(.stat-value.neg){background:linear-gradient(160deg, rgba(239,68,68,0.12), var(--panel-2) 60%);border-color:rgba(239,68,68,0.35);}
+  .stat-tile .stat-value.pos{color:#4ade80;text-shadow:0 0 16px rgba(34,197,94,0.5);}
+  .stat-tile .stat-value.neg{color:#fb7185;text-shadow:0 0 16px rgba(239,68,68,0.5);}
+  .stat-tile .stat-value.gold{
+    background:linear-gradient(135deg, var(--accent2), var(--gold-bright));
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  .stat-tile.wide{grid-column:1/-1;}
+
+  .stat-hero{
+    grid-column:1/-1;
+    background:linear-gradient(160deg, rgba(47,91,255,0.14), var(--panel) 65%);
+    border:1px solid rgba(143,168,255,0.4);
+    border-radius:16px;
+    padding:20px;text-align:center;
+    box-shadow:0 0 30px rgba(47,91,255,0.12);
+  }
+  .stat-hero .stat-label{font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:1.2px;margin-bottom:8px;}
+  .stat-hero .stat-value{
+    font-family:'JetBrains Mono',monospace;font-size:32px;font-weight:700;
+    background:linear-gradient(135deg, var(--accent2), var(--gold-bright) 55%, var(--accent2));
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+
+  .stat-mini-row{grid-column:1/-1;display:flex;gap:10px;}
+  .stat-mini-row .stat-tile{flex:1;padding:10px 12px;}
+  .stat-mini-row .stat-label{font-size:10px;margin-bottom:4px;}
+  .stat-mini-row .stat-value{font-size:14.5px;}
+
+  @keyframes tileFlash{
+    0%{box-shadow:0 0 0 0 rgba(61,90,254,0.22), inset 0 0 0 1px rgba(61,90,254,0.25);}
+    100%{box-shadow:0 0 0 10px rgba(61,90,254,0), inset 0 0 0 1px rgba(61,90,254,0);}
+  }
+  .stat-tile.flash{animation:tileFlash 0.8s ease-out;}
+  .stat-hero.flash{animation:tileFlash 0.8s ease-out;}
+
+  /* ---- policy modal popup ---- */
+  .modal-overlay{
+    display:none;position:fixed;inset:0;background:rgba(3,5,12,0.65);
+    backdrop-filter:blur(3px);z-index:999;align-items:center;justify-content:center;padding:20px;
+    animation:modalFadeIn .18s ease-out;
+  }
+  .modal-overlay.show{display:flex;}
+  @keyframes modalFadeIn{from{opacity:0;}to{opacity:1;}}
+  .modal-card{
+    background:var(--panel);border:1px solid var(--line);border-radius:20px;
+    max-width:440px;width:100%;padding:26px 24px;text-align:center;
+    box-shadow:0 20px 60px rgba(0,0,0,0.5);
+    animation:modalPop .22s cubic-bezier(.34,1.4,.64,1);
+  }
+  @keyframes modalPop{from{transform:scale(.92);opacity:0;}to{transform:scale(1);opacity:1;}}
+  .modal-icon{font-size:30px;margin-bottom:10px;}
+  .modal-text{font-size:14px;line-height:1.7;color:var(--text);margin-bottom:20px;text-align:left;}
+  .modal-text b{color:var(--gold-bright);}
+
+  .strike-grid{
+    display:grid;grid-template-columns:1fr 1fr;gap:8px;
+    margin:12px 0;
+  }
+  .strike-cell{
+    background:var(--panel-2);border:1px solid var(--line);border-radius:10px;
+    padding:9px 10px;font-size:12.5px;color:var(--text-dim);
+    display:flex;align-items:center;gap:8px;
+  }
+  .strike-num{
+    flex:none;width:20px;height:20px;border-radius:50%;
+    background:var(--panel);border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;
+    font-family:'JetBrains Mono',monospace;font-weight:700;font-size:11px;color:var(--text);
+  }
+  .strike-cell.danger{border-color:rgba(239,68,68,0.4);}
+  .strike-cell.danger .strike-num{background:rgba(239,68,68,0.15);border-color:var(--short);color:var(--short);}
+  .strike-cell.danger{color:var(--short);}
+
+  .modal-ok{
+    background:linear-gradient(135deg, var(--accent2), var(--gold-bright));
+    color:#ffffff;border:none;padding:10px 28px;border-radius:13px;
+    font-weight:700;font-size:14px;cursor:pointer;font-family:'Space Grotesk',sans-serif;
+    transition:filter .15s, transform .12s;
+    box-shadow:0 4px 16px rgba(47,91,255,0.3);
+  }
+  .modal-ok:hover{filter:brightness(1.1);transform:translateY(-1px);}
+  .modal-card.danger .modal-ok{background:linear-gradient(135deg, #ff8080, var(--short));box-shadow:0 4px 16px rgba(239,68,68,0.3);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="top-row">
+      <div class="bar"></div>
+      <h1>XAU Trading Position Calculator</h1>
+      <span class="sub">v2.1</span>
+    </div>
+    <div class="shimmer-line"></div>
+  </header>
+
+  <div class="news" id="newsBanner">
+    <div class="news-head"><span class="dot"></span><span id="newsHeadText">正在读取 Forex Factory 今日新闻…</span></div>
+    <div id="newsAlertText"></div>
+    <div class="news-list" id="newsList"></div>
+  </div>
+
+  <div class="grid">
+
+    <!-- LEFT: INPUTS -->
+    <div>
+      <div class="card">
+        <h2>关卡 Level</h2>
+        <div class="btn-row" id="modeBtnRow" style="margin-bottom:8px;justify-content:flex-start;">
+          <button class="chip-btn mode-btn active" data-mode="F">F Mode</button>
+          <button class="chip-btn mode-btn" data-mode="P">P Mode</button>
+        </div>
+        <div class="btn-row" id="tierBtnRow">
+          <button class="chip-btn active" data-tier="1">1</button>
+          <button class="chip-btn" data-tier="2">2</button>
+        </div>
+
+        <details class="adv">
+          <summary>详情</summary>
+          <div class="adv-body">
+            <div class="field-grid">
+              <div class="preset-strip" id="presetStrip"></div>
+
+              <div class="mini-field">
+                <div class="mini-label">成本</div>
+                <div class="mini-row"><input type="number" id="costInput" class="mini-input" value="2000" step="1"><span class="mini-unit">USDT</span></div>
+              </div>
+
+              <div id="tpFixedWrap">
+                <div class="mini-field">
+                  <div class="mini-label">止盈目标</div>
+                  <div class="mini-row"><input type="number" id="tpTargetFixed" class="mini-input" value="6710"><span class="mini-unit">USDT</span></div>
+                </div>
+              </div>
+            </div>
+            <div class="hint" id="tpPolicyHint" style="display:none;"></div>
+
+            <div id="splitWrap" style="display:none;">
+              <div class="field-grid">
+                <div id="walletBalWrap" style="display:none;">
+                  <div class="mini-field">
+                    <div class="mini-label">钱包余额</div>
+                    <div class="mini-row"><input type="number" id="walletBal" class="mini-input" value="100000"><span class="mini-unit">USDT</span></div>
+                  </div>
+                </div>
+                <div class="mini-field">
+                  <div class="mini-label">净利润目标</div>
+                  <div class="mini-row"><input type="number" id="netProfit" class="mini-input" value="2000"><span class="mini-unit">USDT</span></div>
+                </div>
+              </div>
+              <div class="hint" id="tpDerivedHint">需要在 XAU 账户打到的止盈目标：<b id="tpDerivedVal">-</b> USDT</div>
+            </div>
+
+            <div class="btn-row" style="margin-top:16px;">
+              <button type="button" class="reset-btn" id="saveDefaultsBtn">💾 保存为我的默认值</button>
+              <button type="button" class="reset-btn" id="restoreDefaultsBtn">↺ 恢复出厂默认</button>
+            </div>
+            <div class="hint" id="savedHint" style="display:none;"></div>
+          </div>
+        </details>
+      </div>
+
+      <div class="card">
+        <h2>交易参数</h2>
+        <label>方向</label>
+        <div class="btn-row">
+          <button class="chip-btn long active" data-dir="long">▲ 做多 LONG</button>
+          <button class="chip-btn short" data-dir="short">▼ 做空 SHORT</button>
+        </div>
+
+        <label>进场价格</label>
+        <input type="number" id="entry" value="4081" step="0.01">
+
+        <label>止损点数 CL Points</label>
+        <input type="number" id="clPoints" value="13" step="0.1">
+        <div class="hint" id="clPriceHint">止损价将自动计算</div>
+
+        <div class="btn-pair">
+          <button class="calc-btn" id="calcBtn">计算 CALCULATE</button>
+          <button class="reset-btn" id="resetBtn" type="button">重置</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: RESULTS -->
+    <div>
+      <div class="card">
+        <h2>XAU Calculator</h2>
+        <div id="xauResults"><div class="empty-state">填好参数后点击"计算"</div></div>
+      </div>
+
+      <div class="card">
+        <h2>X Exchange</h2>
+        <div id="xResults"><div class="empty-state">填好参数后点击"计算"</div></div>
+      </div>
+    </div>
+
+  </div>
+
+  <footer>
+    <span>© 2026 BCC. All rights reserved.</span>
+    <span>数据仅供参考 · 新闻数据来自 Forex Factory</span>
+  </footer>
+</div>
+
+<div class="modal-overlay" id="policyModal">
+  <div class="modal-card">
+    <div class="modal-icon" id="modalIcon">⚠️</div>
+    <div class="modal-text" id="modalText"></div>
+    <button class="modal-ok" id="modalOkBtn">我知道了</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="chooseFamilyModal">
+  <div class="modal-card" style="max-width:360px;">
+    <div class="modal-icon">➕</div>
+    <div class="modal-text">要新增哪一个关卡？</div>
+    <div class="btn-row" style="margin-top:4px;">
+      <button class="modal-ok" id="chooseFamilyBtn1" style="flex:1;"></button>
+      <button class="modal-ok" id="chooseFamilyBtn2" style="flex:1;"></button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ---------------- Modes & Presets ----------------
+const DAILY_LOSS_REASON = '每日最大亏损限制 3%（以开盘余额或净值中较高者为准）';
+const STRIKE_REASON = '打击系统：单笔交易(含平仓后10分钟内、同品种同方向的加仓)浮亏达到主账户规模1%即触发一次警告，4次警告后账户关闭';
+
+const MODES = {
+  F: {
+    order: ['1','2'],
+    tiers: {
+      '1': {cost:2000, maxDD:12, damageCost:2.5, tp:6710, split:false, clPoints:13,
+            damageCostMax:3, damageCostReason:DAILY_LOSS_REASON,
+            tpWarn:6711, tpMax:7200},
+      '2': {cost:2600, maxDD:12, damageCost:0.9, tp:null, split:true, walletAdjusted:true, clPoints:9,
+            damageCostMax:1, damageCostReason:STRIKE_REASON, strikeGrid:true,
+            splitRatio:0.85},
+    }
+  },
+  P: {
+    order: ['1','2','3'],
+    tiers: {
+      '1': {cost:1000, maxDD:6, damageCost:2.5, tp:3110, split:false, clPoints:13,
+            damageCostMax:3, damageCostReason:DAILY_LOSS_REASON,
+            tpWarn:3111, tpMax:3600},
+      '2': {cost:1600, maxDD:6, damageCost:2.5, tp:3110, split:false, clPoints:13,
+            damageCostMax:3, damageCostReason:DAILY_LOSS_REASON,
+            tpWarn:3111, tpMax:3600},
+      '3': {cost:4500, maxDD:6, damageCost:2.5, tp:null, split:true, walletAdjusted:true, clPoints:25,
+            damageCostMax:3, damageCostReason:DAILY_LOSS_REASON,
+            splitRatio:0.80},
+    }
+  }
+};
+
+let currentMode = 'F';
+let currentTier = '1';
+let currentDir = 'long';
+let currentSplitRatio = MODES[currentMode].tiers[currentTier].splitRatio || 0.85;
+
+function presetOf(tier){ return MODES[currentMode].tiers[tier]; }
+
+const WALLET = 100000;
+const FEE_FF = 5;      // fundingpips fee per lot
+const FEE_X = 6;       // X exchange fee per lot
+const CONTRACT = 100;  // XAU contract size per lot
+
+function safeLog(...args){
+  try{
+    if(typeof console!=='undefined' && typeof console.log==='function') console.log(...args);
+  }catch(e){}
+}
+
+function fmt(n){ if(!isFinite(n)) return '-'; return n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+
+function animateResults(containerId){
+  const container = document.getElementById(containerId);
+  container.querySelectorAll('.stat-tile, .stat-hero').forEach(t=>{
+    t.classList.remove('flash'); void t.offsetWidth; t.classList.add('flash');
+  });
+  container.querySelectorAll('.stat-num').forEach(el=>{
+    const target = parseFloat(el.dataset.target);
+    const suffix = el.dataset.suffix || '';
+    if(!isFinite(target)) return;
+    const start = performance.now();
+    const duration = 650;
+    function step(now){
+      const t = Math.min((now-start)/duration, 1);
+      const eased = 1-Math.pow(1-t,3);
+      el.textContent = fmt(target*eased) + suffix;
+      if(t<1) requestAnimationFrame(step);
+      else el.textContent = fmt(target) + suffix;
+    }
+    requestAnimationFrame(step);
+  });
+}
+
+function getCost(){
+  return parseFloat(document.getElementById('costInput').value) || 0;
+}
+
+function xTargetFor(p, cost, damageCost){
+  return cost * (damageCost / p.maxDD);
+}
+
+// For split tiers: solve the account's gross TP target (tpTarget) so that
+// the trader's REAL take-home (firm payout minus the simultaneous X Exchange hedge
+// loss at CL) equals the net profit they actually asked for.
+function computeGrossTarget(p, cost, entry, clPoints, damageCost){
+  const maxDD = p.maxDD;
+  const riskAmount = WALLET*damageCost/100;
+  const riskPerLot = clPoints*CONTRACT + FEE_FF;
+  const lot = riskAmount/riskPerLot;
+  const feeTotal = lot*FEE_FF;
+
+  const xTarget = xTargetFor(p, cost, damageCost);
+  const xPerLotGross = clPoints*CONTRACT;
+  const xLot = xTarget/(xPerLotGross-FEE_X);
+  const k = xLot/lot; // ratio of hedge loss to gross profit
+
+  const net = parseFloat(document.getElementById('netProfit').value)||0;
+  let shortfall = 0;
+  if(p.walletAdjusted){
+    const walletBal = parseFloat(document.getElementById('walletBal').value)||0;
+    shortfall = Math.max(0, WALLET - walletBal);
+  }
+
+  const denom = currentSplitRatio - k;
+  if(denom<=0) return NaN; // impossible configuration (hedge loss eats the whole split)
+  // Real payout from the firm = (G - shortfall) * splitRatio  (shortfall recovery itself is
+  // NOT paid out — it only restores the account to its funded balance; it is not withdrawable).
+  const G = (net + shortfall*currentSplitRatio + k*feeTotal) / denom;
+  return G;
+}
+
+// Every tier has an editable Damage Cost with its own max limit and reason (see MODES config).
+let lastDamageCostChecked = null;
+function checkDamageCostPolicy(){
+  const p = presetOf(currentTier);
+  const max = p.damageCostMax;
+  const val = parseFloat(document.getElementById('damageCostInput').value)||0;
+  if(val===lastDamageCostChecked) return;
+  lastDamageCostChecked = val;
+  if(val>=max){
+    let html;
+    if(p.strikeGrid){
+      html = `⚠️ <b>打击系统</b>：单笔交易(含平仓后10分钟内、同品种同方向的加仓)浮亏达到主账户规模1%即触发一次警告。
+        <br><br>警告累计不重置——
+        <div class="strike-grid">
+          <div class="strike-cell"><span class="strike-num">1</span>已发出警告</div>
+          <div class="strike-cell"><span class="strike-num">2</span>奖励减半</div>
+          <div class="strike-cell"><span class="strike-num">3</span>奖励降至20%</div>
+          <div class="strike-cell danger"><span class="strike-num">4</span>账户直接关闭</div>
+        </div>
+        Damage Cost 必须低于 <b>${max}%</b>，请调整后再计算`;
+    } else {
+      html = `⚠️ ${p.damageCostReason}，Damage Cost 必须低于 <b>${max}%</b>，请调整后再计算`;
+    }
+    showModal(html, true);
+  }
+}
+
+function getDamageCost(){
+  const p = presetOf(currentTier);
+  const el = document.getElementById('damageCostInput');
+  if(el) return parseFloat(el.value) || p.damageCost;
+  return p.damageCost;
+}
+
+function renderPresetStrip(){
+  const p = presetOf(currentTier);
+  const damageCostHtml = `<div class="mini-field"><div class="mini-label">Damage Cost</div><div class="mini-row"><input type="number" id="damageCostInput" class="mini-input" value="${p.damageCost}" step="0.1"><span class="mini-unit">%</span></div></div>`;
+  document.getElementById('presetStrip').innerHTML = `
+    <div class="mini-field readonly"><div class="mini-label">Max DD</div><div class="mini-row"><span class="mini-static">${p.maxDD}</span><span class="mini-unit">%</span></div></div>
+    ${damageCostHtml}
+    <div class="mini-field readonly"><div class="mini-label">钱包</div><div class="mini-row"><span class="mini-static">100,000</span><span class="mini-unit">USDT</span></div></div>
+  `;
+  {
+    document.getElementById('damageCostInput').addEventListener('input', updateDerivedTp);
+    document.getElementById('damageCostInput').addEventListener('change', checkDamageCostPolicy);
+    lastDamageCostChecked = null;
+  }
+}
+renderPresetStrip();
+document.getElementById('costInput').addEventListener('input', updateDerivedTp);
+
+// ---------------- Per-tier saved defaults (localStorage) ----------------
+function storageKey(mode, tier){ return `xauCalc_tierDefaults_${mode}_${tier}`; }
+
+function loadTierDefaults(tier){
+  try{
+    const raw = localStorage.getItem(storageKey(currentMode, tier));
+    return raw ? JSON.parse(raw) : null;
+  }catch(e){ return null; }
+}
+
+function showSavedHint(msg){
+  const el = document.getElementById('savedHint');
+  el.textContent = msg;
+  el.style.display = 'block';
+  clearTimeout(showSavedHint._t);
+  showSavedHint._t = setTimeout(()=>{ el.style.display='none'; }, 3500);
+}
+
+function applyTierDefaults(tier, forceFactory){
+  const p = presetOf(tier);
+  const saved = forceFactory ? null : loadTierDefaults(tier);
+
+  document.getElementById('costInput').value = (saved && saved.cost!=null) ? saved.cost : p.cost;
+  document.getElementById('clPoints').value = (saved && saved.clPoints!=null) ? saved.clPoints : p.clPoints;
+  renderPresetStrip();
+  const dcEl = document.getElementById('damageCostInput');
+  if(dcEl) dcEl.value = (saved && saved.damageCost!=null) ? saved.damageCost : p.damageCost;
+  updateClHint();
+
+  if(p.split){
+    document.getElementById('tpFixedWrap').style.display='none';
+    document.getElementById('splitWrap').style.display='block';
+    document.getElementById('walletBalWrap').style.display = p.walletAdjusted ? 'contents' : 'none';
+    document.getElementById('netProfit').value = (saved && saved.netProfit!=null) ? saved.netProfit : 2000;
+    if(p.walletAdjusted){
+      document.getElementById('walletBal').value = (saved && saved.walletBal!=null) ? saved.walletBal : 100000;
+    }
+    currentSplitRatio = p.splitRatio;
+  } else {
+    document.getElementById('tpFixedWrap').style.display='contents';
+    document.getElementById('splitWrap').style.display='none';
+    document.getElementById('tpTargetFixed').value = (saved && saved.tp!=null) ? saved.tp : p.tp;
+    lastTpChecked = parseFloat(document.getElementById('tpTargetFixed').value)||0;
+  }
+  updateDerivedTp();
+}
+
+document.getElementById('saveDefaultsBtn').addEventListener('click', ()=>{
+  const p = presetOf(currentTier);
+  const settings = {
+    cost: parseFloat(document.getElementById('costInput').value)||0,
+    clPoints: parseFloat(document.getElementById('clPoints').value)||0,
+    damageCost: getDamageCost(),
+  };
+  if(p.split){
+    settings.netProfit = parseFloat(document.getElementById('netProfit').value)||0;
+    if(p.walletAdjusted) settings.walletBal = parseFloat(document.getElementById('walletBal').value)||0;
+  } else {
+    settings.tp = parseFloat(document.getElementById('tpTargetFixed').value)||0;
+  }
+  try{
+    localStorage.setItem(storageKey(currentMode, currentTier), JSON.stringify(settings));
+    showSavedHint(`✅ 已保存 ${currentMode} 模式档位 ${currentTier} 的默认值(存在本机浏览器)`);
+  }catch(e){
+    safeLog('[saveDefaults] failed', e);
+    showSavedHint('⚠️ 保存失败，可能是浏览器隐私/无痕模式限制了本地存储');
+  }
+});
+
+document.getElementById('restoreDefaultsBtn').addEventListener('click', ()=>{
+  try{ localStorage.removeItem(storageKey(currentMode, currentTier)); }catch(e){}
+  applyTierDefaults(currentTier, true);
+  showSavedHint(`↺ 已恢复 ${currentMode} 模式档位 ${currentTier} 的出厂默认值`);
+});
+
+// ---------------- P-mode-only family clones (1→1.2→1.3, 2→2.2→2.3) ----------------
+const CLONE_BASE_TIERS = ['1','2']; // only these two support cloning, and only in P mode
+const MAX_CLONES = 2;
+function familyCloneKey(baseTier){ return `xauCalc_familyClones_P_${baseTier}`; }
+function loadFamilyClones(baseTier){
+  try{
+    const raw = localStorage.getItem(familyCloneKey(baseTier));
+    return raw ? JSON.parse(raw) : [];
+  }catch(e){ return []; }
+}
+function saveFamilyClones(baseTier, arr){
+  try{ localStorage.setItem(familyCloneKey(baseTier), JSON.stringify(arr)); }catch(e){}
+}
+function registerClone(baseTier, cloneId){
+  MODES.P.tiers[cloneId] = Object.assign({}, MODES.P.tiers[baseTier]);
+}
+function tierBtnLabel(mode, tier){
+  if(mode==='P' && CLONE_BASE_TIERS.includes(tier) && loadFamilyClones(tier).length>0){
+    return `${tier}.1`;
+  }
+  return tier;
+}
+function addClone(baseTier){
+  const clones = loadFamilyClones(baseTier);
+  if(clones.length>=MAX_CLONES) return;
+  const cloneId = `${baseTier}.${clones.length+2}`;
+  registerClone(baseTier, cloneId);
+  clones.push(cloneId);
+  saveFamilyClones(baseTier, clones);
+  currentTier = cloneId;
+  try{ localStorage.setItem(LAST_TIER_KEY('P'), currentTier); }catch(e){}
+  renderTierButtons();
+  applyTierDefaults(currentTier, false);
+}
+function nextCloneIdFor(baseTier){
+  return `${baseTier}.${loadFamilyClones(baseTier).length+2}`;
+}
+function openChooseFamilyModal(bases){
+  const btn1 = document.getElementById('chooseFamilyBtn1');
+  const btn2 = document.getElementById('chooseFamilyBtn2');
+  const id1 = nextCloneIdFor(bases[0]);
+  const id2 = nextCloneIdFor(bases[1]);
+  btn1.textContent = `添加 ${id1}`;
+  btn2.textContent = `添加 ${id2}`;
+  btn1.onclick = ()=>{ document.getElementById('chooseFamilyModal').classList.remove('show'); addClone(bases[0]); };
+  btn2.onclick = ()=>{ document.getElementById('chooseFamilyModal').classList.remove('show'); addClone(bases[1]); };
+  document.getElementById('chooseFamilyModal').classList.add('show');
+}
+function deleteClone(baseTier, cloneId){
+  const clones = loadFamilyClones(baseTier);
+  if(clones[clones.length-1]!==cloneId) return; // only the last (topmost) clone can be removed
+  clones.pop();
+  saveFamilyClones(baseTier, clones);
+  delete MODES.P.tiers[cloneId];
+  try{ localStorage.removeItem(storageKey('P', cloneId)); }catch(e){}
+  const wasCurrent = currentTier===cloneId;
+  if(wasCurrent){
+    currentTier = baseTier;
+    try{ localStorage.setItem(LAST_TIER_KEY('P'), currentTier); }catch(e){}
+  }
+  renderTierButtons();
+  if(wasCurrent) applyTierDefaults(currentTier, false);
+}
+// Re-register any previously saved P-mode clones so MODES.P.tiers has them before restore logic runs.
+CLONE_BASE_TIERS.forEach(baseTier=>{
+  loadFamilyClones(baseTier).forEach(cloneId=>registerClone(baseTier, cloneId));
+});
+
+// ---------------- Tier switching ----------------
+const LAST_TIER_KEY = mode => `xauCalc_lastTier_${mode}`;
+const LAST_MODE_KEY = 'xauCalc_lastMode';
+
+function renderTierButtons(){
+  const row = document.getElementById('tierBtnRow');
+  row.innerHTML = '';
+  MODES[currentMode].order.forEach(tier=>{
+    const btn = document.createElement('button');
+    btn.className = 'chip-btn' + (tier===currentTier ? ' active' : '');
+    btn.dataset.tier = tier;
+    btn.textContent = tierBtnLabel(currentMode, tier);
+    row.appendChild(btn);
+
+    if(currentMode==='P' && CLONE_BASE_TIERS.includes(tier)){
+      const clones = loadFamilyClones(tier);
+      clones.forEach((cloneId, idx)=>{
+        const cbtn = document.createElement('button');
+        cbtn.className = 'chip-btn' + (cloneId===currentTier ? ' active' : '');
+        cbtn.dataset.tier = cloneId;
+        const deletable = idx===clones.length-1;
+        cbtn.innerHTML = deletable
+          ? `${cloneId}<span class="tier-del" data-del-base="${tier}" data-del="${cloneId}" title="删除这个关卡">×</span>`
+          : cloneId;
+        row.appendChild(cbtn);
+      });
+    }
+  });
+  if(currentMode==='P'){
+    const availableBases = CLONE_BASE_TIERS.filter(t=>loadFamilyClones(t).length<MAX_CLONES);
+    if(availableBases.length>0){
+      const plus = document.createElement('button');
+      plus.type = 'button';
+      plus.id = 'addTierBtn';
+      plus.className = 'chip-btn add-tier-btn';
+      plus.textContent = '＋';
+      plus.title = '新增关卡';
+      row.appendChild(plus);
+    }
+  }
+}
+
+document.getElementById('tierBtnRow').addEventListener('click', (e)=>{
+  const delBtn = e.target.closest('.tier-del');
+  if(delBtn){
+    e.stopPropagation();
+    deleteClone(delBtn.dataset.delBase, delBtn.dataset.del);
+    return;
+  }
+  const addBtn = e.target.closest('#addTierBtn');
+  if(addBtn){
+    const availableBases = CLONE_BASE_TIERS.filter(t=>loadFamilyClones(t).length<MAX_CLONES);
+    if(availableBases.length===1){
+      addClone(availableBases[0]);
+    } else if(availableBases.length===2){
+      openChooseFamilyModal(availableBases);
+    }
+    return;
+  }
+  const btn = e.target.closest('[data-tier]');
+  if(!btn) return;
+  currentTier = btn.dataset.tier;
+  try{ localStorage.setItem(LAST_TIER_KEY(currentMode), currentTier); }catch(e){}
+  renderTierButtons();
+  applyTierDefaults(currentTier, false);
+});
+
+// Restore last-selected mode & tier (if any) before applying saved defaults below.
+try{
+  const lastMode = localStorage.getItem(LAST_MODE_KEY);
+  if(lastMode && MODES[lastMode]) currentMode = lastMode;
+}catch(e){}
+try{
+  const lastTier = localStorage.getItem(LAST_TIER_KEY(currentMode));
+  if(lastTier && MODES[currentMode].tiers[lastTier]) currentTier = lastTier;
+}catch(e){}
+if(!MODES[currentMode].tiers[currentTier]) currentTier = MODES[currentMode].order[0];
+renderTierButtons();
+
+document.querySelectorAll('#modeBtnRow [data-mode]').forEach(b=>{
+  b.classList.toggle('active', b.dataset.mode===currentMode);
+});
+document.getElementById('modeBtnRow').addEventListener('click', (e)=>{
+  const btn = e.target.closest('[data-mode]');
+  if(!btn) return;
+  const mode = btn.dataset.mode;
+  if(mode===currentMode) return;
+  document.querySelectorAll('#modeBtnRow [data-mode]').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  currentMode = mode;
+  try{ localStorage.setItem(LAST_MODE_KEY, currentMode); }catch(e){}
+  let tier = MODES[currentMode].order[0];
+  try{
+    const lastTier = localStorage.getItem(LAST_TIER_KEY(currentMode));
+    if(lastTier && MODES[currentMode].tiers[lastTier]) tier = lastTier;
+  }catch(e){}
+  currentTier = tier;
+  renderTierButtons();
+  applyTierDefaults(currentTier, false);
+});
+
+// Apply saved defaults (if any) for the initially active tier on page load happens
+// at the very end of the script (see bottom) so all variables are initialized first.
+
+document.getElementById('netProfit').addEventListener('input', updateDerivedTp);
+document.getElementById('walletBal').addEventListener('input', updateDerivedTp);
+
+function updateDerivedTp(){
+  const p = presetOf(currentTier);
+  if(!p.split) return;
+  const cost = getCost();
+  const entry = parseFloat(document.getElementById('entry').value);
+  const clPoints = parseFloat(document.getElementById('clPoints').value);
+  if(!isFinite(entry) || !isFinite(clPoints) || clPoints<=0){
+    document.getElementById('tpDerivedVal').textContent = '-';
+    return;
+  }
+  const tp = computeGrossTarget(p, cost, entry, clPoints, getDamageCost());
+  document.getElementById('tpDerivedVal').textContent = isFinite(tp) ? fmt(tp) : '⚠️ 配置无解(对冲亏损超过净利润)';
+}
+updateDerivedTp();
+
+// ---------------- Direction ----------------
+document.querySelectorAll('[data-dir]').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('[data-dir]').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    currentDir = btn.dataset.dir;
+    updateClHint();
+  });
+});
+document.getElementById('entry').addEventListener('input', ()=>{ updateClHint(); updateDerivedTp(); });
+document.getElementById('clPoints').addEventListener('input', ()=>{ updateClHint(); updateDerivedTp(); });
+function updateClHint(){
+  const entry = parseFloat(document.getElementById('entry').value);
+  const pts = parseFloat(document.getElementById('clPoints').value);
+  if(isFinite(entry) && isFinite(pts)){
+    const cl = currentDir==='long' ? entry-pts : entry+pts;
+    document.getElementById('clPriceHint').textContent = `止损价 = ${fmt(cl)}`;
+  }
+}
+updateClHint();
+
+// ---------------- Policy modal helpers ----------------
+function showModal(html, danger){
+  const card = document.querySelector('#policyModal .modal-card');
+  document.getElementById('modalIcon').textContent = danger ? '⛔' : '⚠️';
+  document.getElementById('modalText').innerHTML = html;
+  card.classList.toggle('danger', !!danger);
+  document.getElementById('policyModal').classList.add('show');
+}
+function hideModal(){
+  document.getElementById('policyModal').classList.remove('show');
+}
+document.getElementById('modalOkBtn').addEventListener('click', hideModal);
+document.getElementById('policyModal').addEventListener('click', (e)=>{
+  if(e.target.id==='policyModal') hideModal();
+});
+document.getElementById('chooseFamilyModal').addEventListener('click', (e)=>{
+  if(e.target.id==='chooseFamilyModal') e.currentTarget.classList.remove('show');
+});
+
+// ---------------- Profit Concentration Policy check (tier 1 fixed TP target) ----------------
+let lastTpChecked = null;
+function checkTpPolicy(){
+  const p = presetOf(currentTier);
+  const tp = parseFloat(document.getElementById('tpTargetFixed').value)||0;
+  if(tp===lastTpChecked) return;
+  lastTpChecked = tp;
+  if(tp>=p.tpMax){
+    showModal(`⚠️ 止盈目标不能超过 <b>${p.tpMax}</b> USDT，请调低后再计算`, true);
+  } else if(tp>=p.tpWarn){
+    showModal('<b>利润集中政策提醒：</b>若单笔交易占该阶段止盈目标超过60%，通过后的大师账户需先完成4个盈利日，才能申请第一次奖励(盈利日最低限额=账户初始余额的0.5%，4天不需连续)。');
+  }
+}
+document.getElementById('tpTargetFixed').addEventListener('change', checkTpPolicy);
+
+// ---------------- Reset ----------------
+document.getElementById('resetBtn').addEventListener('click', ()=>{
+  location.reload();
+});
+
+// ---------------- Calculate ----------------
+document.getElementById('calcBtn').addEventListener('click', ()=>{
+  const p = presetOf(currentTier);
+  const damageCost = getDamageCost();
+
+  if(damageCost>=p.damageCostMax){
+    document.getElementById('xauResults').innerHTML = `<div class="empty-state">⚠️ ${p.damageCostReason}，Damage Cost 必须低于 ${p.damageCostMax}%，请调整后再计算</div>`;
+    document.getElementById('xResults').innerHTML = '';
+    return;
+  }
+
+  const entry = parseFloat(document.getElementById('entry').value);
+  const clPoints = parseFloat(document.getElementById('clPoints').value);
+  const xTarget = xTargetFor(p, getCost(), damageCost);
+
+  let tpTarget;
+  if(p.split){
+    tpTarget = computeGrossTarget(p, getCost(), entry, clPoints, damageCost);
+  } else {
+    tpTarget = parseFloat(document.getElementById('tpTargetFixed').value)||0;
+  }
+
+  if(!isFinite(entry) || !isFinite(clPoints) || clPoints<=0){
+    document.getElementById('xauResults').innerHTML = '<div class="empty-state">请填写有效的进场价格和止损点数</div>';
+    document.getElementById('xResults').innerHTML = '';
+    return;
+  }
+
+  if(!p.split && tpTarget>=p.tpMax){
+    document.getElementById('xauResults').innerHTML = `<div class="empty-state">⚠️ 止盈目标不能超过 ${p.tpMax} USDT，请调低后再计算</div>`;
+    document.getElementById('xResults').innerHTML = '';
+    return;
+  }
+
+  if(!isFinite(tpTarget)){
+    document.getElementById('xauResults').innerHTML = '<div class="empty-state">⚠️ 当前配置无解：对冲账户的止损亏损已经超过这个分成比例能给的净利润，试试调高净利润目标、换更高的分成比例，或调整止损点数</div>';
+    document.getElementById('xResults').innerHTML = '';
+    return;
+  }
+
+  const clPrice = currentDir==='long' ? entry-clPoints : entry+clPoints;
+  const priceDiff = Math.abs(entry-clPrice);
+  const pipsDiff = priceDiff*100;
+  const riskAmount = WALLET*damageCost/100;
+  const riskPerLot = priceDiff*CONTRACT + FEE_FF;
+  const lot = riskAmount/riskPerLot;
+  const feeTotal = lot*FEE_FF;
+  const grossProfit = tpTarget+feeTotal;
+  const priceMove = grossProfit/(lot*CONTRACT);
+  const pipsMove = priceMove*100;
+  const tpPrice = currentDir==='long' ? entry+priceMove : entry-priceMove;
+  const rr = tpTarget/riskAmount;
+
+  const dirTag = currentDir==='long' ? '<span class="dir-tag long">LONG</span>' : '<span class="dir-tag short">SHORT</span>';
+
+  document.getElementById('xauResults').innerHTML = `
+    <div class="stat-grid">
+      <div class="stat-hero">
+        <div class="stat-label">应开仓位 Lot Size</div>
+        <div class="stat-value"><span class="stat-num" data-target="${lot}" data-suffix=" 手">0.00 手</span></div>
+      </div>
+      <div class="stat-mini-row">
+        <div class="stat-tile"><div class="stat-label">方向</div><div class="stat-value">${dirTag}</div></div>
+        <div class="stat-tile"><div class="stat-label">止盈 TP</div><div class="stat-value pos"><span class="stat-num" data-target="${tpPrice}" data-suffix="">0.00</span></div></div>
+        <div class="stat-tile"><div class="stat-label">止损 CL</div><div class="stat-value neg"><span class="stat-num" data-target="${clPrice}" data-suffix="">0.00</span></div></div>
+      </div>
+    </div>
+  `;
+  animateResults('xauResults');
+
+  // ---- X Exchange (mirrored hedge) ----
+  const xDir = currentDir==='long' ? 'short' : 'long';
+  const xTP = clPrice;   // mirrored
+  const xSL = tpPrice;   // mirrored
+  const xPerLotGross = Math.abs(entry-xTP)*CONTRACT;
+  const xLot = xTarget/(xPerLotGross-FEE_X);
+  const xGrossTP = xLot*xPerLotGross;
+  const xFee = xLot*FEE_X;
+  const xLossAtCL = xLot*Math.abs(entry-xSL)*CONTRACT;
+
+  const xDirTag = xDir==='long' ? '<span class="dir-tag long">LONG</span>' : '<span class="dir-tag short">SHORT</span>';
+
+  document.getElementById('xResults').innerHTML = `
+    <div class="stat-grid">
+      <div class="stat-hero">
+        <div class="stat-label">应开仓位 Lot Size</div>
+        <div class="stat-value"><span class="stat-num" data-target="${xLot}" data-suffix=" 手">0.00 手</span></div>
+      </div>
+      <div class="stat-mini-row">
+        <div class="stat-tile"><div class="stat-label">打到止盈 TP</div><div class="stat-value pos">毛利润 <span class="stat-num" data-target="${xGrossTP}" data-suffix=" USDT">0.00 USDT</span></div></div>
+        <div class="stat-tile"><div class="stat-label">打到止损 CL</div><div class="stat-value neg">亏损 <span class="stat-num" data-target="${xLossAtCL}" data-suffix=" USDT">0.00 USDT</span></div></div>
+      </div>
+    </div>
+  `;
+  animateResults('xResults');
+});
+
+// ---------------- Forex Factory news (via Netlify Function once Git-deployed) ----------------
+const NEWS_WINDOW_MIN = 15;
+
+async function loadNews(){
+  const headEl = document.getElementById('newsHeadText');
+  const listEl = document.getElementById('newsList');
+  const alertEl = document.getElementById('newsAlertText');
+  const bannerEl = document.getElementById('newsBanner');
+  const calcBtn = document.getElementById('calcBtn');
+
+  const sources = [
+    '/api/news',
+    '/.netlify/functions/news',
+    'https://nfs.faireconomy.media/ff_calendar_thisweek.json'
+  ];
+
+  let data = null;
+  for(const src of sources){
+    try{
+      const res = await fetch(src);
+      if(!res.ok){ safeLog('[news] non-ok from', src, res.status); continue; }
+      data = await res.json();
+      if(data){ safeLog('[news] success from', src); break; }
+    } catch(err){ safeLog('[news] failed from', src, err); }
+  }
+
+  try{
+    if(!data) throw new Error('all sources failed');
+
+    const now = new Date();
+    const todayStr = now.toDateString();
+    const todaysHigh = data.filter(e=>{
+      const cur = (e.country||e.currency||'').toUpperCase();
+      const impact = (e.impact||'').toLowerCase();
+      if(cur!=='USD' || impact!=='high') return false;
+      const d = new Date(e.date);
+      return d.toDateString()===todayStr;
+    }).map(e=>({title:e.title, time:new Date(e.date)}))
+      .sort((a,b)=>a.time-b.time);
+
+    headEl.textContent = `Forex Factory · 今日 USD 高影响新闻 (${todaysHigh.length})`;
+
+    if(todaysHigh.length===0){
+      listEl.innerHTML = '<span class="news-empty">今天没有 USD 红色高影响新闻</span>';
+    } else {
+      // Group events that share the exact same timestamp into one chip
+      const groups = [];
+      todaysHigh.forEach(e=>{
+        const last = groups[groups.length-1];
+        if(last && last.time.getTime()===e.time.getTime()){
+          last.titles.push(e.title);
+        } else {
+          groups.push({ time: e.time, titles: [e.title] });
+        }
+      });
+      listEl.innerHTML = groups.map(g=>{
+        const diffMin = Math.abs(now-g.time)/60000;
+        const soon = diffMin<=NEWS_WINDOW_MIN;
+        const t = g.time.toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'});
+        return `<span class="news-chip ${soon?'soon':''}">${t} · ${g.titles.join(', ')}</span>`;
+      }).join('');
+    }
+
+    const blocking = todaysHigh.find(e=> Math.abs(now-e.time)/60000 <= NEWS_WINDOW_MIN);
+    if(blocking){
+      bannerEl.classList.add('alert');
+      alertEl.textContent = `⚠️ ${blocking.title} 新闻发布前后${NEWS_WINDOW_MIN}分钟内，禁止开仓/平仓`;
+      calcBtn.disabled = true;
+      calcBtn.textContent = '新闻时段 · 暂停操作';
+    } else {
+      bannerEl.classList.remove('alert');
+      alertEl.textContent = '';
+      calcBtn.disabled = false;
+      calcBtn.textContent = '计算 CALCULATE';
+    }
+  } catch(err){
+    headEl.textContent = 'Forex Factory 新闻数据暂时无法读取';
+    listEl.innerHTML = '<span class="news-empty">网络受限或数据源暂不可用，请稍后刷新，或手动查看 forexfactory.com/calendar</span>';
+  }
+}
+
+loadNews();
+setInterval(loadNews, 600000); // every 10 min
+
+// Apply saved defaults (if any) for the initially active tier — placed at the very
+// end of the script so every variable/function it depends on is already initialized.
+try{
+  applyTierDefaults(currentTier, false);
+}catch(e){
+  safeLog('[applyTierDefaults on load failed]', e);
+}
+</script>
+</body>
+</html>
