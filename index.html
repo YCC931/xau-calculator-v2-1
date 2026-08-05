@@ -446,6 +446,10 @@
                     <div class="mini-label">钱包余额</div>
                     <div class="mini-row"><input type="number" id="walletBal" class="mini-input" value="100000"><span class="mini-unit">USDT</span></div>
                   </div>
+                  <div class="mini-field" id="prevXLossWrap" style="display:none;">
+                    <div class="mini-label">上次X亏损</div>
+                    <div class="mini-row"><input type="number" id="prevXLoss" class="mini-input" value="0"><span class="mini-unit">USDT</span></div>
+                  </div>
                 </div>
                 <div class="mini-field">
                   <div class="mini-label">净利润目标</div>
@@ -538,7 +542,7 @@ const MODES = {
       '1': {cost:2000, maxDD:12, damageCost:2.5, tp:6710, split:false, clPoints:13,
             damageCostMax:3, damageCostReason:DAILY_LOSS_REASON,
             tpWarn:6711, tpMax:7200},
-      '2': {cost:2600, maxDD:12, damageCost:0.9, tp:null, split:true, walletAdjusted:true, clPoints:9,
+      '2': {cost:2600, maxDD:12, damageCost:0.8, tp:null, split:true, walletAdjusted:true, clPoints:9,
             damageCostMax:1, damageCostReason:STRIKE_REASON, strikeGrid:true,
             splitRatio:0.85},
     }
@@ -625,17 +629,23 @@ function computeGrossTarget(p, cost, entry, clPoints, damageCost){
   const k = xLot/lot; // ratio of hedge loss to gross profit
 
   const net = parseFloat(document.getElementById('netProfit').value)||0;
-  let shortfall = 0;
+  // diff > 0: wallet is below 100k (shortfall) — that portion just restores the account, it is NOT paid out.
+  // diff < 0: wallet is above 100k (surplus) — that portion is already-realized profit and DOES get split
+  //           along with this trade's new profit, same as normal, but only AFTER a prior X Exchange
+  //           loss (from whatever earlier trade created that surplus) is subtracted back out.
+  let diff = 0;
+  let prevXLoss = 0;
   if(p.walletAdjusted){
     const walletBal = parseFloat(document.getElementById('walletBal').value)||0;
-    shortfall = Math.max(0, WALLET - walletBal);
+    diff = WALLET - walletBal;
+    if(walletBal>WALLET){
+      prevXLoss = parseFloat(document.getElementById('prevXLoss').value)||0;
+    }
   }
 
   const denom = currentSplitRatio - k;
   if(denom<=0) return NaN; // impossible configuration (hedge loss eats the whole split)
-  // Real payout from the firm = (G - shortfall) * splitRatio  (shortfall recovery itself is
-  // NOT paid out — it only restores the account to its funded balance; it is not withdrawable).
-  const G = (net + shortfall*currentSplitRatio + k*feeTotal) / denom;
+  const G = (net + diff*currentSplitRatio + k*feeTotal + prevXLoss) / denom;
   return G;
 }
 
@@ -726,6 +736,8 @@ function applyTierDefaults(tier, forceFactory){
     document.getElementById('netProfit').value = (saved && saved.netProfit!=null) ? saved.netProfit : 2000;
     if(p.walletAdjusted){
       document.getElementById('walletBal').value = (saved && saved.walletBal!=null) ? saved.walletBal : 100000;
+      document.getElementById('prevXLoss').value = (saved && saved.prevXLoss!=null) ? saved.prevXLoss : 0;
+      syncPrevXLossVisibility();
     }
     currentSplitRatio = p.splitRatio;
   } else {
@@ -746,7 +758,10 @@ document.getElementById('saveDefaultsBtn').addEventListener('click', ()=>{
   };
   if(p.split){
     settings.netProfit = parseFloat(document.getElementById('netProfit').value)||0;
-    if(p.walletAdjusted) settings.walletBal = parseFloat(document.getElementById('walletBal').value)||0;
+    if(p.walletAdjusted){
+      settings.walletBal = parseFloat(document.getElementById('walletBal').value)||0;
+      settings.prevXLoss = parseFloat(document.getElementById('prevXLoss').value)||0;
+    }
   } else {
     settings.tp = parseFloat(document.getElementById('tpTargetFixed').value)||0;
   }
@@ -938,7 +953,18 @@ document.getElementById('modeBtnRow').addEventListener('click', (e)=>{
 // at the very end of the script (see bottom) so all variables are initialized first.
 
 document.getElementById('netProfit').addEventListener('input', updateDerivedTp);
-document.getElementById('walletBal').addEventListener('input', updateDerivedTp);
+function syncPrevXLossVisibility(){
+  const bal = parseFloat(document.getElementById('walletBal').value)||0;
+  const wrap = document.getElementById('prevXLossWrap');
+  if(bal>WALLET){
+    wrap.style.display = 'block';
+  } else {
+    wrap.style.display = 'none';
+    document.getElementById('prevXLoss').value = 0;
+  }
+}
+document.getElementById('walletBal').addEventListener('input', ()=>{ syncPrevXLossVisibility(); updateDerivedTp(); });
+document.getElementById('prevXLoss').addEventListener('input', updateDerivedTp);
 
 function updateDerivedTp(){
   const p = presetOf(currentTier);
@@ -951,7 +977,11 @@ function updateDerivedTp(){
     return;
   }
   const tp = computeGrossTarget(p, cost, entry, clPoints, getDamageCost());
-  document.getElementById('tpDerivedVal').textContent = isFinite(tp) ? fmt(tp) : '⚠️ 配置无解(对冲亏损超过净利润)';
+  let display;
+  if(!isFinite(tp)) display = '⚠️ 配置无解(对冲亏损超过净利润)';
+  else if(p.walletAdjusted && tp<=0) display = '✅ 余额盈余已够，无需新开仓';
+  else display = fmt(tp);
+  document.getElementById('tpDerivedVal').textContent = display;
 }
 updateDerivedTp();
 
@@ -1051,6 +1081,12 @@ document.getElementById('calcBtn').addEventListener('click', ()=>{
 
   if(!isFinite(tpTarget)){
     document.getElementById('xauResults').innerHTML = '<div class="empty-state">⚠️ 当前配置无解：对冲账户的止损亏损已经超过这个分成比例能给的净利润，试试调高净利润目标、换更高的分成比例，或调整止损点数</div>';
+    document.getElementById('xResults').innerHTML = '';
+    return;
+  }
+
+  if(p.split && p.walletAdjusted && tpTarget<=0){
+    document.getElementById('xauResults').innerHTML = '<div class="empty-state">✅ 你的钱包余额已经超过100,000，光是这部分盈余分成就已经达到或超过你的净利润目标，不需要再开新仓位</div>';
     document.getElementById('xResults').innerHTML = '';
     return;
   }
