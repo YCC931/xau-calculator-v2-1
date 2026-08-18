@@ -24,6 +24,9 @@
     --radius: 18px;
   }
   *{box-sizing:border-box;}
+  button:focus-visible, input:focus-visible, summary:focus-visible{
+    outline:2px solid var(--gold-bright);outline-offset:2px;border-radius:4px;
+  }
   body{
     margin:0;
     background:
@@ -61,6 +64,8 @@
   *{scrollbar-color:var(--line) var(--bg);scrollbar-width:thin;}
 
   @keyframes riseIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+  @keyframes fieldRevealIn{from{opacity:0;transform:translateY(-4px);}to{opacity:1;transform:translateY(0);}}
+  .reveal-anim{animation:fieldRevealIn .18s ease-out;}
 
   /* ---- news banner ---- */
   .news{
@@ -256,6 +261,8 @@
   .mini-field .mini-input::-webkit-inner-spin-button,
   .mini-field .mini-input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
   .mini-field .mini-unit{font-size:10px;color:var(--text-dim);flex:none;}
+  .mini-field .mini-sub{font-size:10px;color:var(--gold-bright);margin-top:5px;}
+  .mini-field .mini-sub b{font-weight:700;}
   .mini-field.readonly{opacity:0.9;}
   .mini-field .mini-static{
     font-family:'JetBrains Mono',monospace;font-weight:700;font-size:15px;color:var(--text);
@@ -263,11 +270,16 @@
 
   /* ---- split dropdown (collapsible select) ---- */
   /* ---- add / delete custom tier ---- */
-  .add-tier-btn{flex:0 0 auto;min-width:38px;font-size:15px;color:var(--gold-bright);font-weight:700;}
-  .tier-del{
-    margin-left:6px;opacity:0.55;font-weight:400;display:inline-block;
-    transition:opacity .12s, color .12s;
+  .add-tier-btn{
+    flex:0 0 auto;min-width:38px;font-size:14px;color:var(--gold-bright);font-weight:700;
+    border-style:dashed;
   }
+  .add-tier-btn:hover{background:var(--panel);}
+  .tier-del{
+    margin-left:6px;opacity:0.5;font-weight:400;display:inline-block;
+    transition:opacity .12s, color .12s, transform .12s;
+  }
+  .tier-del:hover{transform:scale(1.15);}
   .tier-del:hover{opacity:1;color:var(--short);}
 
   /* ---- sub panel (split / hedge groupings) ---- */
@@ -393,7 +405,7 @@
     <div class="top-row">
       <div class="bar"></div>
       <h1>XAU Trading Position Calculator</h1>
-      <span class="sub">v2.1</span>
+      <span class="sub">v2.2</span>
     </div>
     <div class="shimmer-line"></div>
   </header>
@@ -532,7 +544,7 @@
 
 <script>
 // ---------------- Modes & Presets ----------------
-const DAILY_LOSS_REASON = '每日最大亏损限制 3%（以开盘余额或净值中较高者为准）';
+const DAILY_LOSS_REASON = '每日最大亏损限制（以开盘余额或净值中较高者为准）';
 const STRIKE_REASON = '打击系统：单笔交易(含平仓后10分钟内、同品种同方向的加仓)浮亏达到主账户规模1%即触发一次警告，4次警告后账户关闭';
 
 const MODES = {
@@ -540,7 +552,7 @@ const MODES = {
     order: ['1','2'],
     tiers: {
       '1': {cost:2000, maxDD:12, damageCost:2.5, tp:6710, split:false, clPoints:13,
-            damageCostMax:3, damageCostReason:DAILY_LOSS_REASON,
+            damageCostMax:3, damageCostReason:DAILY_LOSS_REASON, dailyLossRule:true,
             tpWarn:6711, tpMax:7200},
       '2': {cost:2600, maxDD:12, damageCost:0.8, tp:null, split:true, walletAdjusted:true, clPoints:9,
             damageCostMax:1, damageCostReason:STRIKE_REASON, strikeGrid:true,
@@ -551,13 +563,13 @@ const MODES = {
     order: ['1','2','3'],
     tiers: {
       '1': {cost:1000, maxDD:6, damageCost:2.5, tp:3110, split:false, clPoints:13,
-            damageCostMax:3, damageCostReason:DAILY_LOSS_REASON,
+            damageCostMax:3, damageCostReason:DAILY_LOSS_REASON, dailyLossRule:true,
             tpWarn:3111, tpMax:3600},
       '2': {cost:1600, maxDD:6, damageCost:2.5, tp:3110, split:false, clPoints:13,
-            damageCostMax:3, damageCostReason:DAILY_LOSS_REASON,
+            damageCostMax:3, damageCostReason:DAILY_LOSS_REASON, dailyLossRule:true,
             tpWarn:3111, tpMax:3600},
       '3': {cost:4500, maxDD:6, damageCost:2.5, tp:null, split:true, walletAdjusted:true, clPoints:25,
-            damageCostMax:3, damageCostReason:DAILY_LOSS_REASON,
+            damageCostMax:3, damageCostReason:DAILY_LOSS_REASON, dailyLossRule:true,
             splitRatio:0.80},
     }
   }
@@ -650,10 +662,28 @@ function computeGrossTarget(p, cost, entry, clPoints, damageCost){
 }
 
 // Every tier has an editable Damage Cost with its own max limit and reason (see MODES config).
+// For "daily loss limit" tiers, the true max scales with the reference balance/equity the trader
+// enters (the higher of opening balance or opening equity that day), not a flat 3%.
+function getDamageCostMax(p){
+  if(p.dailyLossRule){
+    const refEl = document.getElementById('refBalanceInput');
+    const ref = refEl ? (parseFloat(refEl.value)||WALLET) : WALLET;
+    return p.damageCostMax * (ref/WALLET);
+  }
+  return p.damageCostMax;
+}
+
+function updateDamageCostMaxHint(){
+  const p = presetOf(currentTier);
+  const max = getDamageCostMax(p);
+  const el = document.getElementById('damageCostMaxVal');
+  if(el) el.textContent = max.toFixed(2);
+}
+
 let lastDamageCostChecked = null;
 function checkDamageCostPolicy(){
   const p = presetOf(currentTier);
-  const max = p.damageCostMax;
+  const max = getDamageCostMax(p);
   const val = parseFloat(document.getElementById('damageCostInput').value)||0;
   if(val===lastDamageCostChecked) return;
   lastDamageCostChecked = val;
@@ -668,9 +698,9 @@ function checkDamageCostPolicy(){
           <div class="strike-cell"><span class="strike-num">3</span>奖励降至20%</div>
           <div class="strike-cell danger"><span class="strike-num">4</span>账户直接关闭</div>
         </div>
-        Damage Cost 必须低于 <b>${max}%</b>，请调整后再计算`;
+        Damage Cost 必须低于 <b>${max.toFixed(2)}%</b>，请调整后再计算`;
     } else {
-      html = `⚠️ ${p.damageCostReason}，Damage Cost 必须低于 <b>${max}%</b>，请调整后再计算`;
+      html = `⚠️ ${p.damageCostReason}，Damage Cost 必须低于 <b>${max.toFixed(2)}%</b>，请调整后再计算`;
     }
     showModal(html, true);
   }
@@ -685,17 +715,61 @@ function getDamageCost(){
 
 function renderPresetStrip(){
   const p = presetOf(currentTier);
-  const damageCostHtml = `<div class="mini-field"><div class="mini-label">Damage Cost</div><div class="mini-row"><input type="number" id="damageCostInput" class="mini-input" value="${p.damageCost}" step="0.1"><span class="mini-unit">%</span></div></div>`;
+  const damageCostHtml = `<div class="mini-field">
+      <div class="mini-label">Damage Cost</div>
+      <div class="mini-row"><input type="number" id="damageCostInput" class="mini-input" value="${p.damageCost}" step="0.1"><span class="mini-unit">%</span></div>
+      ${p.dailyLossRule ? `<div class="mini-sub" id="damageCostMaxHint" style="display:none;">上限 <b id="damageCostMaxVal">-</b>%</div>` : ''}
+    </div>`;
+  const refBalanceHtml = p.dailyLossRule
+    ? `<div id="refBalanceFieldWrap" style="display:none;"><div class="mini-field">
+        <div class="mini-label" title="填当天开盘时，余额和净值(含浮动盈亏)两者中较高的那个">参考余额/净值 ⓘ</div>
+        <div class="mini-row"><input type="number" id="refBalanceInput" class="mini-input" value="100000"><span class="mini-unit">USDT</span></div>
+      </div></div>`
+    : '';
   document.getElementById('presetStrip').innerHTML = `
     <div class="mini-field readonly"><div class="mini-label">Max DD</div><div class="mini-row"><span class="mini-static">${p.maxDD}</span><span class="mini-unit">%</span></div></div>
     ${damageCostHtml}
+    ${refBalanceHtml}
     <div class="mini-field readonly"><div class="mini-label">钱包</div><div class="mini-row"><span class="mini-static">100,000</span><span class="mini-unit">USDT</span></div></div>
   `;
+  if(p.dailyLossRule) updateDamageCostMaxHint();
   {
-    document.getElementById('damageCostInput').addEventListener('input', updateDerivedTp);
-    document.getElementById('damageCostInput').addEventListener('change', checkDamageCostPolicy);
+    const dcInput = document.getElementById('damageCostInput');
+    dcInput.addEventListener('input', updateDerivedTp);
+    dcInput.addEventListener('change', checkDamageCostPolicy);
     lastDamageCostChecked = null;
+    if(p.dailyLossRule){
+      dcInput.addEventListener('focus', revealDamageCostExtras);
+      dcInput.addEventListener('blur', hideDamageCostExtrasIfUnfocused);
+    }
   }
+  if(p.dailyLossRule){
+    const refEl = document.getElementById('refBalanceInput');
+    refEl.addEventListener('input', ()=>{ updateDerivedTp(); updateDamageCostMaxHint(); });
+    refEl.addEventListener('change', ()=>{ lastDamageCostChecked = null; checkDamageCostPolicy(); });
+    refEl.addEventListener('focus', revealDamageCostExtras);
+    refEl.addEventListener('blur', hideDamageCostExtrasIfUnfocused);
+  }
+}
+function revealDamageCostExtras(){
+  [ 'refBalanceFieldWrap', 'damageCostMaxHint' ].forEach(id=>{
+    const el = document.getElementById(id);
+    if(!el) return;
+    el.style.display = 'block';
+    el.classList.remove('reveal-anim'); void el.offsetWidth; el.classList.add('reveal-anim');
+  });
+}
+function hideDamageCostExtrasIfUnfocused(){
+  setTimeout(()=>{
+    const active = document.activeElement;
+    const dcInput = document.getElementById('damageCostInput');
+    const refInput = document.getElementById('refBalanceInput');
+    if(active===dcInput || (refInput && active===refInput)) return;
+    const wrap = document.getElementById('refBalanceFieldWrap');
+    if(wrap) wrap.style.display = 'none';
+    const maxHint = document.getElementById('damageCostMaxHint');
+    if(maxHint) maxHint.style.display = 'none';
+  }, 120);
 }
 renderPresetStrip();
 document.getElementById('costInput').addEventListener('input', updateDerivedTp);
@@ -727,6 +801,10 @@ function applyTierDefaults(tier, forceFactory){
   renderPresetStrip();
   const dcEl = document.getElementById('damageCostInput');
   if(dcEl) dcEl.value = (saved && saved.damageCost!=null) ? saved.damageCost : p.damageCost;
+  if(p.dailyLossRule){
+    const refEl = document.getElementById('refBalanceInput');
+    if(refEl) refEl.value = (saved && saved.refBalance!=null) ? saved.refBalance : 100000;
+  }
   updateClHint();
 
   if(p.split){
@@ -756,6 +834,9 @@ document.getElementById('saveDefaultsBtn').addEventListener('click', ()=>{
     clPoints: parseFloat(document.getElementById('clPoints').value)||0,
     damageCost: getDamageCost(),
   };
+  if(p.dailyLossRule){
+    settings.refBalance = parseFloat(document.getElementById('refBalanceInput').value)||100000;
+  }
   if(p.split){
     settings.netProfit = parseFloat(document.getElementById('netProfit').value)||0;
     if(p.walletAdjusted){
@@ -1050,8 +1131,9 @@ document.getElementById('calcBtn').addEventListener('click', ()=>{
   const p = presetOf(currentTier);
   const damageCost = getDamageCost();
 
-  if(damageCost>=p.damageCostMax){
-    document.getElementById('xauResults').innerHTML = `<div class="empty-state">⚠️ ${p.damageCostReason}，Damage Cost 必须低于 ${p.damageCostMax}%，请调整后再计算</div>`;
+  const dcMax = getDamageCostMax(p);
+  if(damageCost>=dcMax){
+    document.getElementById('xauResults').innerHTML = `<div class="empty-state">⚠️ ${p.damageCostReason}，Damage Cost 必须低于 ${dcMax.toFixed(2)}%，请调整后再计算</div>`;
     document.getElementById('xResults').innerHTML = '';
     return;
   }
