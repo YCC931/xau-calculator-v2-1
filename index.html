@@ -253,20 +253,21 @@
   }
   .mini-field .mini-row{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-width:0;}
   .mini-field .mini-input{
-    background:transparent;border:none;color:var(--text);font-weight:700;
-    font-family:'JetBrains Mono',monospace;font-size:14px;line-height:1.2;padding:0;
+    display:block;background:transparent;border:none;color:var(--text);font-weight:700;
+    font-family:'JetBrains Mono',monospace;font-size:14px;line-height:17px;height:17px;
+    padding:0;margin:0;vertical-align:top;
     width:100%;min-width:0;-moz-appearance:textfield;
   }
   .mini-field .mini-input:focus{outline:none;color:var(--gold-bright);}
   .mini-field .mini-input::-webkit-inner-spin-button,
   .mini-field .mini-input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
-  .mini-field .mini-unit{font-size:10px;line-height:1.3;color:var(--text-dim);flex:none;}
+  .mini-field .mini-unit{display:block;font-size:10px;line-height:13px;margin:0;color:var(--text-dim);flex:none;}
   .mini-field .mini-sub{font-size:10px;color:var(--gold-bright);margin-top:5px;}
   .mini-field .mini-sub b{font-weight:700;}
   .mini-field.readonly{opacity:0.9;}
   .mini-field .mini-static{
     display:block;font-family:'JetBrains Mono',monospace;font-weight:700;
-    font-size:14px;line-height:1.2;color:var(--text);
+    font-size:14px;line-height:17px;height:17px;margin:0;color:var(--text);
   }
 
   /* ---- split dropdown (collapsible select) ---- */
