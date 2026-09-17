@@ -264,6 +264,12 @@
   .mini-field .mini-unit{display:block;font-size:10px;line-height:13px;margin:0;color:var(--text-dim);flex:none;}
   .mini-field .mini-sub{font-size:10px;color:var(--gold-bright);margin-top:5px;}
   .mini-field .mini-sub b{font-weight:700;}
+  .tp-mode-link-wrap{margin-top:6px;text-align:right;}
+  .tp-mode-link{
+    font-size:11px;color:var(--text-dim);text-decoration:none;
+    border-bottom:1px dashed var(--text-dim);cursor:pointer;transition:color .12s, border-color .12s;
+  }
+  .tp-mode-link:hover{color:var(--gold-bright);border-color:var(--gold-bright);}
   .mini-field.readonly{opacity:0.9;}
   .mini-field .mini-static{
     display:block;font-family:'JetBrains Mono',monospace;font-weight:700;
@@ -407,7 +413,7 @@
     <div class="top-row">
       <div class="bar"></div>
       <h1>XAU Trading Position Calculator</h1>
-      <span class="sub">v2.2</span>
+      <span class="sub">v2.3</span>
     </div>
     <div class="shimmer-line"></div>
   </header>
@@ -465,12 +471,23 @@
                     <div class="mini-row"><input type="number" id="prevXLoss" class="mini-input" value="0"><span class="mini-unit">USDT</span></div>
                   </div>
                 </div>
-                <div class="mini-field">
+              </div>
+
+              <div class="field-grid" style="margin-top:8px;">
+                <div class="mini-field" id="netProfitWrap">
                   <div class="mini-label">净利润目标</div>
                   <div class="mini-row"><input type="number" id="netProfit" class="mini-input" value="2000"><span class="mini-unit">USDT</span></div>
+                  <div class="mini-sub" id="netProfitSub">需要在 XAU 账户打到的止盈目标：<b id="netProfitSubVal">-</b> USDT</div>
+                </div>
+                <div class="mini-field" id="grossTpWrap" style="display:none;">
+                  <div class="mini-label">止盈目标</div>
+                  <div class="mini-row"><input type="number" id="grossTpInput" class="mini-input" value=""><span class="mini-unit">USDT</span></div>
+                  <div class="mini-sub" id="grossTpSub">净利润目标 <b id="grossTpSubVal">-</b> USDT</div>
                 </div>
               </div>
-              <div class="hint" id="tpDerivedHint">需要在 XAU 账户打到的止盈目标：<b id="tpDerivedVal">-</b> USDT</div>
+              <div class="tp-mode-link-wrap">
+                <a href="javascript:void(0)" class="tp-mode-link" id="tpModeToggleLink">改用止盈目标设定</a>
+              </div>
             </div>
 
             <div class="btn-row" style="margin-top:16px;">
@@ -630,8 +647,7 @@ function xTargetFor(p, cost, damageCost){
 // For split tiers: solve the account's gross TP target (tpTarget) so that
 // the trader's REAL take-home (firm payout minus the simultaneous X Exchange hedge
 // loss at CL) equals the net profit they actually asked for.
-function computeGrossTarget(p, cost, entry, clPoints, damageCost){
-  const maxDD = p.maxDD;
+function computeHedgeParams(p, cost, entry, clPoints, damageCost){
   const riskAmount = WALLET*damageCost/100;
   const riskPerLot = clPoints*CONTRACT + FEE_FF;
   const lot = riskAmount/riskPerLot;
@@ -642,7 +658,6 @@ function computeGrossTarget(p, cost, entry, clPoints, damageCost){
   const xLot = xTarget/(xPerLotGross-FEE_X);
   const k = xLot/lot; // ratio of hedge loss to gross profit
 
-  const net = parseFloat(document.getElementById('netProfit').value)||0;
   // diff > 0: wallet is below 100k (shortfall) — that portion just restores the account, it is NOT paid out.
   // diff < 0: wallet is above 100k (surplus) — that portion is already-realized profit and DOES get split
   //           along with this trade's new profit, same as normal, but only AFTER a prior X Exchange
@@ -658,9 +673,21 @@ function computeGrossTarget(p, cost, entry, clPoints, damageCost){
   }
 
   const denom = currentSplitRatio - k;
+  return {lot, feeTotal, k, diff, prevXLoss, denom};
+}
+
+function computeGrossTarget(p, cost, entry, clPoints, damageCost){
+  const {feeTotal, k, diff, prevXLoss, denom} = computeHedgeParams(p, cost, entry, clPoints, damageCost);
   if(denom<=0) return NaN; // impossible configuration (hedge loss eats the whole split)
-  const G = (net + diff*currentSplitRatio + k*feeTotal + prevXLoss) / denom;
-  return G;
+  const net = parseFloat(document.getElementById('netProfit').value)||0;
+  return (net + diff*currentSplitRatio + k*feeTotal + prevXLoss) / denom;
+}
+
+// Reverse direction: given a gross TP target the trader typed in directly, solve for the
+// net profit that would actually result — the exact algebraic inverse of computeGrossTarget.
+function computeNetFromGross(p, cost, entry, clPoints, damageCost, G){
+  const {feeTotal, k, diff, prevXLoss, denom} = computeHedgeParams(p, cost, entry, clPoints, damageCost);
+  return G*denom - diff*currentSplitRatio - k*feeTotal - prevXLoss;
 }
 
 // Every tier has an editable Damage Cost with its own max limit and reason (see MODES config).
@@ -732,7 +759,7 @@ function renderPresetStrip(){
     <div class="mini-field readonly"><div class="mini-label">Max DD</div><div class="mini-row"><span class="mini-static">${p.maxDD}</span><span class="mini-unit">%</span></div></div>
     ${damageCostHtml}
     ${refBalanceHtml}
-    <div class="mini-field readonly"><div class="mini-label">钱包</div><div class="mini-row"><span class="mini-static">100,000</span><span class="mini-unit">USDT</span></div></div>
+    ${p.walletAdjusted ? '' : `<div class="mini-field readonly"><div class="mini-label">钱包</div><div class="mini-row"><span class="mini-static">100,000</span><span class="mini-unit">USDT</span></div></div>`}
   `;
   if(p.dailyLossRule) updateDamageCostMaxHint();
   {
@@ -816,6 +843,7 @@ function applyTierDefaults(tier, forceFactory){
       syncPrevXLossVisibility();
     }
     currentSplitRatio = p.splitRatio;
+    setTpInputMode('net');
   } else {
     document.getElementById('tpFixedWrap').style.display='contents';
     document.getElementById('splitWrap').style.display='none';
@@ -1032,6 +1060,7 @@ document.getElementById('modeBtnRow').addEventListener('click', (e)=>{
 // at the very end of the script (see bottom) so all variables are initialized first.
 
 document.getElementById('netProfit').addEventListener('input', updateDerivedTp);
+document.getElementById('grossTpInput').addEventListener('input', updateNetFromGrossInput);
 function syncPrevXLossVisibility(){
   const bal = parseFloat(document.getElementById('walletBal').value)||0;
   const wrap = document.getElementById('prevXLossWrap');
@@ -1051,17 +1080,53 @@ function updateDerivedTp(){
   const cost = getCost();
   const entry = parseFloat(document.getElementById('entry').value);
   const clPoints = parseFloat(document.getElementById('clPoints').value);
+  const grossEl = document.getElementById('grossTpInput');
   if(!isFinite(entry) || !isFinite(clPoints) || clPoints<=0){
-    document.getElementById('tpDerivedVal').textContent = '-';
+    grossEl.value = '';
+    document.getElementById('netProfitSubVal').textContent = '-';
     return;
   }
   const tp = computeGrossTarget(p, cost, entry, clPoints, getDamageCost());
-  let display;
-  if(!isFinite(tp)) display = '⚠️ 配置无解(对冲亏损超过净利润)';
-  else if(p.walletAdjusted && tp<=0) display = '✅ 余额盈余已够，无需新开仓';
-  else display = fmt(tp);
-  document.getElementById('tpDerivedVal').textContent = display;
+  if(!isFinite(tp)){
+    grossEl.value = '';
+    document.getElementById('netProfitSubVal').textContent = '⚠️ 无解';
+  } else {
+    grossEl.value = tp.toFixed(2);
+    document.getElementById('netProfitSubVal').textContent = fmt(tp);
+  }
 }
+
+// Reverse binding: if the trader edits the gross TP target directly instead of the net
+// profit target, recompute what net profit that would actually produce.
+function updateNetFromGrossInput(){
+  const p = presetOf(currentTier);
+  if(!p.split) return;
+  const cost = getCost();
+  const entry = parseFloat(document.getElementById('entry').value);
+  const clPoints = parseFloat(document.getElementById('clPoints').value);
+  const G = parseFloat(document.getElementById('grossTpInput').value);
+  if(!isFinite(entry) || !isFinite(clPoints) || clPoints<=0 || !isFinite(G)){
+    document.getElementById('grossTpSubVal').textContent = '-';
+    return;
+  }
+  const net = computeNetFromGross(p, cost, entry, clPoints, getDamageCost(), G);
+  document.getElementById('netProfit').value = net.toFixed(2);
+  document.getElementById('grossTpSubVal').textContent = fmt(net);
+}
+
+// ---------------- Net-profit vs gross-TP toggle (only one shown as editable at a time) ----------------
+let tpInputMode = 'net';
+function setTpInputMode(mode){
+  tpInputMode = mode;
+  const showNet = mode==='net';
+  document.getElementById('netProfitWrap').style.display = showNet ? 'block' : 'none';
+  document.getElementById('grossTpWrap').style.display = showNet ? 'none' : 'block';
+  document.getElementById('tpModeToggleLink').textContent = showNet ? '改用止盈目标设定' : '改用净利润目标设定';
+  if(showNet) updateDerivedTp(); else updateNetFromGrossInput();
+}
+document.getElementById('tpModeToggleLink').addEventListener('click', ()=>{
+  setTpInputMode(tpInputMode==='net' ? 'gross' : 'net');
+});
 updateDerivedTp();
 
 // ---------------- Direction ----------------
@@ -1142,7 +1207,7 @@ document.getElementById('calcBtn').addEventListener('click', ()=>{
 
   let tpTarget;
   if(p.split){
-    tpTarget = computeGrossTarget(p, getCost(), entry, clPoints, damageCost);
+    tpTarget = parseFloat(document.getElementById('grossTpInput').value)||NaN;
   } else {
     tpTarget = parseFloat(document.getElementById('tpTargetFixed').value)||0;
   }
